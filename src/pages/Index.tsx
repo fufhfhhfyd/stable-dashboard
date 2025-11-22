@@ -436,26 +436,58 @@ const Index = () => {
 
       setLoading(true);
       try {
-        // Prepare file data for n8n
-        let fileData = null;
+        // Upload file to Supabase Storage and get URL instead of sending Base64
+        let fileUrl = null;
         if (file || filePreview) {
-          // Use existing file or restore from preview
-          const base64 = file 
-            ? await new Promise<string>((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.readAsDataURL(file);
-              })
-            : filePreview; // Use saved preview if no new file
+          const supabase = getSupabase();
+          if (!supabase) {
+            showNotification('error', 'Please configure Supabase in Settings to upload files');
+            setLoading(false);
+            return;
+          }
 
-          fileData = {
-            name: file?.name || 'uploaded-image',
-            type: file?.type || 'image/jpeg',
-            data: base64
-          };
+          // Get or convert file to blob
+          let fileToUpload: File;
+          if (file) {
+            fileToUpload = file;
+          } else if (filePreview) {
+            // Convert base64 to blob if using saved preview
+            const response = await fetch(filePreview);
+            const blob = await response.blob();
+            fileToUpload = new File([blob], 'uploaded-file', { type: blob.type });
+          } else {
+            throw new Error('No file available');
+          }
+
+          // Generate unique filename
+          const timestamp = Date.now();
+          const fileExt = fileToUpload.name.split('.').pop();
+          const fileName = `${activeTab}_${timestamp}.${fileExt}`;
+          const filePath = `ads/${fileName}`;
+
+          // Upload to Supabase Storage
+          console.log('Uploading file to Supabase Storage:', filePath);
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('ad-files')
+            .upload(filePath, fileToUpload, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            throw new Error(`File upload failed: ${uploadError.message}`);
+          }
+
+          // Get public URL
+          const { data: urlData } = supabase.storage
+            .from('ad-files')
+            .getPublicUrl(filePath);
+
+          fileUrl = urlData.publicUrl;
+          console.log('File uploaded successfully. URL:', fileUrl);
         }
 
-        // Send data directly to n8n webhook - NO DATABASE INSERT for "Create Ad"
+        // Send data directly to n8n webhook with file URL instead of Base64
         const webhookPayload = {
           // Ad creation details
           type: activeTab,
@@ -467,7 +499,7 @@ const Index = () => {
           product_name: productName || null,
           product_description: productDescription || null,
           aspect_ratio: aspectRatio,
-          file: fileData,
+          file_url: fileUrl, // Send URL instead of Base64 data
           timestamp: new Date().toISOString()
         };
 
@@ -475,7 +507,7 @@ const Index = () => {
         const targetWebhook = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
         
         console.log('Sending to n8n webhook (Create Ad):', targetWebhook);
-        console.log('Webhook payload:', { ...webhookPayload, file: fileData ? 'FILE_DATA_PRESENT' : null });
+        console.log('Webhook payload:', webhookPayload);
 
         const webhookResponse = await fetch(targetWebhook, {
           method: 'POST',
@@ -488,10 +520,11 @@ const Index = () => {
           throw new Error(`Webhook failed (${webhookResponse.status}): ${errorText}`);
         }
         
-        console.log('Webhook response:', await webhookResponse.text());
-        showNotification('success', 'Ad generation request sent successfully!');
+        const responseData = await webhookResponse.json();
+        console.log('Webhook response:', responseData);
+        showNotification('success', 'Ad generation request sent successfully! Stay on this page to create more ads.');
         // Don't clear form data - data persists until manually cleared
-        setActiveView('dashboard');
+        // REMOVED: setActiveView('dashboard'); - This was causing unwanted auto-redirect
 
       } catch (err: any) {
         console.error('Submit error:', err);
@@ -511,19 +544,31 @@ const Index = () => {
         <div className="bg-white rounded-2xl shadow-xl border border-border overflow-hidden">
           <div className="flex border-b bg-muted/50">
             <button 
-              onClick={() => { setActiveTab('reels'); setFile(null); setFilePreview(null); }}
+              onClick={() => { 
+                setActiveTab('reels'); 
+                setFile(null); 
+                setFilePreview(null); 
+              }}
               className={`flex-1 py-4 text-sm font-semibold transition-all ${activeTab === 'reels' ? 'bg-white border-b-2 border-accent text-accent shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}
             >
               Update Product Image
             </button>
             <button 
-              onClick={() => setActiveTab('product')}
+              onClick={() => { 
+                setActiveTab('product'); 
+                setFile(null); 
+                setFilePreview(null); 
+              }}
               className={`flex-1 py-4 text-sm font-semibold transition-all ${activeTab === 'product' ? 'bg-white border-b-2 border-primary text-primary shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}
             >
               Product Ads
             </button>
             <button 
-              onClick={() => setActiveTab('ugc')}
+              onClick={() => { 
+                setActiveTab('ugc'); 
+                setFile(null); 
+                setFilePreview(null); 
+              }}
               className={`flex-1 py-4 text-sm font-semibold transition-all ${activeTab === 'ugc' ? 'bg-white border-b-2 border-purple-500 text-purple-600 shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}
             >
               UGC Ads
@@ -738,7 +783,7 @@ const Index = () => {
                   'bg-gradient-purple'}`}
             >
               {loading ? <Loader2 className="animate-spin" /> : <PlayCircle fill="currentColor" />}
-              Generate {activeTab === 'reels' ? 'Reel' : 'Ad Campaign'}
+              {activeTab === 'reels' ? 'Update Image' : 'Generate Ad Campaign'}
             </button>
           </form>
         </div>
