@@ -1,8 +1,47 @@
-# Welcome to your Lovable project
+# AdGen Studio - AI-Powered Social Media Ads
 
 ## Project info
 
 **URL**: https://lovable.dev/projects/99e68166-71ae-4c3a-8c66-a105a2ab328e
+
+## 🚀 Setup Instructions
+
+### 1. Supabase Storage Setup (Required)
+
+Before using the ad creation feature, you **must** set up a Supabase Storage bucket:
+
+1. Go to your Supabase project dashboard
+2. Navigate to **SQL Editor**
+3. Copy and run the SQL commands from `supabase-storage-setup.sql` in this repo
+
+This creates the `ad-files` bucket with public read access for storing uploaded images and videos.
+
+### 2. Configure App Settings
+
+In the app's **Settings** page, configure:
+- **Supabase URL**: Your Supabase project URL
+- **Supabase Anon Key**: Your Supabase anonymous/public key  
+- **n8n Generate Webhook**: Your n8n workflow webhook for ad generation
+- **n8n Post Webhook**: Your n8n workflow webhook for posting to social media
+- **Database Table Name**: Default is `social_media_videos`
+
+### 3. Key Features & Fixes
+
+✅ **Fixed Issues:**
+- Auto-redirect after clicking "Generate" button - now stays on current page
+- Button label corrected to "Update Image" for image uploads
+- Form data persists in local storage when navigating between tabs
+- File inputs properly separated (images only for "Update Product Image", images/videos for others)
+- Webhook now receives file **URLs** instead of Base64 data (files uploaded to Supabase Storage first)
+
+📋 **Features:**
+- **Create Ads**: Generate AI-powered ads with image/video uploads
+  - Update Product Image (images only)
+  - Product Ads (images/videos)
+  - UGC Ads (images/videos)
+- **Post Management**: View, edit, and manage generated ads
+- **Local Storage**: Form data persists across page navigation
+- **File Upload**: Files uploaded to Supabase Storage, URLs sent to webhooks
 
 ## How can I edit this code?
 
@@ -59,6 +98,7 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (Database & Storage)
 
 ## How can I deploy this project?
 
